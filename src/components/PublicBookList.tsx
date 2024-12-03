@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { FaStar } from "react-icons/fa";
 import { db } from "../firebaseConfig";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";

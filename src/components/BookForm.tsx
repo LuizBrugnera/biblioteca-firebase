@@ -36,7 +36,7 @@ const BookForm = ({ user }: { user: any }) => {
           setBook({ id: bookSnapshot.id, ...bookSnapshot.data() } as Book);
         } else {
           console.error("Book not found!");
-          navigate("/admin");
+          navigate("/my-books");
         }
       };
       fetchBook();
@@ -68,7 +68,7 @@ const BookForm = ({ user }: { user: any }) => {
 
       await setDoc(bookRef, { ...book, userId: user.uid });
       console.log("Book saved:", book);
-      navigate("/admin");
+      navigate("/my-books");
     } catch (error) {
       console.error("Error saving book:", error);
     }

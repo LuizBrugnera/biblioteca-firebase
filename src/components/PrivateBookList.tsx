@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../firebaseConfig";
 import {
@@ -53,7 +53,7 @@ const PrivateBookList = ({ user }: { user: any }) => {
     <div>
       <h1 className="text-3xl font-bold mb-6">Gerenciar Livros</h1>
       <Link
-        to="/admin/book"
+        to="/my-books/book"
         className="bg-green-500 text-white px-4 py-2 rounded mb-4 inline-block"
       >
         Adicionar Novo Livro
@@ -80,7 +80,7 @@ const PrivateBookList = ({ user }: { user: any }) => {
               <td className="py-3 px-6 text-center">{book.genre}</td>
               <td className="py-3 px-6 text-center">
                 <Link
-                  to={`/admin/book/${book.id}`}
+                  to={`/my-books/book/${book.id}`}
                   className="text-blue-500 hover:text-blue-700 mr-4"
                 >
                   Editar

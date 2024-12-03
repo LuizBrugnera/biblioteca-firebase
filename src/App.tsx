@@ -55,10 +55,10 @@ const App: React.FC = () => {
                 <>
                   <span className="text-gray-800 mx-4">{user.displayName}</span>
                   <Link
-                    to="/admin"
+                    to="/my-books"
                     className="text-gray-800 hover:text-gray-600 mx-4"
                   >
-                    Admin
+                    Meus livros
                   </Link>
                   <button
                     onClick={handleLogout}
@@ -82,7 +82,7 @@ const App: React.FC = () => {
           <Route path="/" element={<PublicBookList user={user} />} />
           <Route path="/login" element={<Login onLogin={handleLogin} />} />
           <Route
-            path="/admin"
+            path="/my-books"
             element={
               user ? (
                 <PrivateBookList user={user} />
@@ -92,13 +92,13 @@ const App: React.FC = () => {
             }
           />
           <Route
-            path="/admin/book/:id?"
+            path="/my-books/book/:id?"
             element={
               user ? <BookForm user={user} /> : <Login onLogin={handleLogin} />
             }
           />
           <Route
-            path="/admin/review/:bookId"
+            path="/my-books/review/:bookId"
             element={user ? <ReviewForm /> : <Login onLogin={handleLogin} />}
           />
         </Routes>
