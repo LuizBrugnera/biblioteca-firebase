@@ -1,8 +1,20 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { books, Book } from "../mockData";
+import { db } from "../firebaseConfig";
+import { doc, setDoc, getDoc, collection } from "firebase/firestore";
 
-const BookForm: React.FC = () => {
+interface Book {
+  id: string;
+  title: string;
+  author: string;
+  description: string;
+  genre: string;
+  averageRating: number;
+  userId: string;
+}
+
+const BookForm = ({ user }: { user: any }) => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const [book, setBook] = useState<Book>({
@@ -12,16 +24,24 @@ const BookForm: React.FC = () => {
     description: "",
     genre: "",
     averageRating: 0,
+    userId: user?.uid || "",
   });
 
   useEffect(() => {
     if (id) {
-      const foundBook = books.find((b) => b.id === id);
-      if (foundBook) {
-        setBook(foundBook);
-      }
+      const fetchBook = async () => {
+        const bookRef = doc(db, "books", id);
+        const bookSnapshot = await getDoc(bookRef);
+        if (bookSnapshot.exists()) {
+          setBook({ id: bookSnapshot.id, ...bookSnapshot.data() } as Book);
+        } else {
+          console.error("Book not found!");
+          navigate("/admin");
+        }
+      };
+      fetchBook();
     }
-  }, [id]);
+  }, [id, navigate]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -30,22 +50,39 @@ const BookForm: React.FC = () => {
     setBook((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would save the book to Firebase
-    console.log("Saving book:", book);
-    navigate("/admin");
+    try {
+      if (!user) {
+        alert("Você precisa estar logado para adicionar ou editar livros.");
+        return;
+      }
+
+      let bookRef;
+      if (id) {
+        bookRef = doc(db, "books", id);
+      } else {
+        bookRef = doc(collection(db, "books"));
+        book.id = bookRef.id;
+      }
+
+      await setDoc(bookRef, { ...book, userId: user.uid });
+      console.log("Book saved:", book);
+      navigate("/admin");
+    } catch (error) {
+      console.error("Error saving book:", error);
+    }
   };
 
   return (
     <div className="max-w-md mx-auto">
       <h1 className="text-3xl font-bold mb-6">
-        {id ? "Edit Book" : "Add New Book"}
+        {id ? "Editar Livro" : "Adicionar Novo Livro"}
       </h1>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="title" className="block mb-1">
-            Title
+            Título
           </label>
           <input
             type="text"
@@ -59,7 +96,7 @@ const BookForm: React.FC = () => {
         </div>
         <div>
           <label htmlFor="author" className="block mb-1">
-            Author
+            Autor
           </label>
           <input
             type="text"
@@ -73,7 +110,7 @@ const BookForm: React.FC = () => {
         </div>
         <div>
           <label htmlFor="genre" className="block mb-1">
-            Genre
+            Gênero
           </label>
           <input
             type="text"
@@ -87,7 +124,7 @@ const BookForm: React.FC = () => {
         </div>
         <div>
           <label htmlFor="description" className="block mb-1">
-            Description
+            Descrição
           </label>
           <textarea
             id="description"
@@ -103,7 +140,7 @@ const BookForm: React.FC = () => {
           type="submit"
           className="bg-blue-500 text-white px-4 py-2 rounded"
         >
-          Save Book
+          Salvar Livro
         </button>
       </form>
     </div>

@@ -1,25 +1,74 @@
-import React, { useState } from "react";
-import { books, Book } from "../mockData";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React, { useState, useEffect } from "react";
 import { FaStar } from "react-icons/fa";
+import { db } from "../firebaseConfig";
+import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 
-const PublicBookList: React.FC = () => {
-  const userId = "user5"; // ID do usuário atual (mockado)
-  const userName = "Usuário Novo"; // Nome do usuário atual (mockado)
-  const [filteredBooks, setFilteredBooks] = useState<Book[]>(books);
+interface User {
+  id: string;
+  name: string;
+}
+
+interface Review {
+  id: string;
+  user: User;
+  rating: number;
+  comment: string;
+}
+
+interface Book {
+  id: string;
+  title: string;
+  author: string;
+  description: string;
+  genre: string;
+  reviews: Review[];
+  averageRating: number;
+}
+
+const PublicBookList = ({ user }: { user: any }) => {
+  const [books, setBooks] = useState<Book[]>([]);
   const [reviewInputs, setReviewInputs] = useState<
     Record<string, { rating: number; comment: string }>
-  >(
-    books.reduce((acc, book) => {
-      acc[book.id] = { rating: 0, comment: "" };
-      return acc;
-    }, {} as Record<string, { rating: number; comment: string }>)
-  );
+  >({});
   const [expandedBooks, setExpandedBooks] = useState<Record<string, boolean>>(
-    books.reduce((acc, book) => {
-      acc[book.id] = false;
-      return acc;
-    }, {} as Record<string, boolean>)
+    {}
   );
+
+  useEffect(() => {
+    const fetchBooks = async () => {
+      const booksCollection = collection(db, "books");
+      const booksSnapshot = await getDocs(booksCollection);
+      const booksData = booksSnapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          title: data.title,
+          author: data.author,
+          description: data.description,
+          genre: data.genre,
+          reviews: data.reviews || [],
+          averageRating: calculateAverageRating(data.reviews || []),
+        } as Book;
+      });
+
+      setBooks(booksData);
+
+      const initialReviewInputs = booksData.reduce((acc, book) => {
+        acc[book.id] = { rating: 0, comment: "" };
+        return acc;
+      }, {} as Record<string, { rating: number; comment: string }>);
+      setReviewInputs(initialReviewInputs);
+
+      const initialExpandedBooks = booksData.reduce((acc, book) => {
+        acc[book.id] = false;
+        return acc;
+      }, {} as Record<string, boolean>);
+      setExpandedBooks(initialExpandedBooks);
+    };
+
+    fetchBooks();
+  }, []);
 
   const handleRatingChange = (bookId: string, rating: number) => {
     setReviewInputs((prev) => ({
@@ -42,55 +91,59 @@ const PublicBookList: React.FC = () => {
     }));
   };
 
-  const addOrEditReview = (bookId: string) => {
+  const addOrEditReview = async (bookId: string) => {
+    if (!user) {
+      alert("Você precisa estar logado para avaliar.");
+      return;
+    }
+
     const { rating, comment } = reviewInputs[bookId];
     if (!rating || !comment.trim()) {
       alert("Por favor, forneça uma avaliação e um comentário.");
       return;
     }
 
-    setFilteredBooks((prevBooks) =>
-      prevBooks.map((book) => {
-        if (book.id !== bookId) return book;
+    const bookRef = doc(db, "books", bookId);
+    const book = books.find((b) => b.id === bookId);
+    if (!book) return;
 
-        const existingReviewIndex = book.reviews.findIndex(
-          (review) => review.user.id === userId
-        );
-
-        if (existingReviewIndex !== -1) {
-          // Editar avaliação existente
-          const updatedReviews = [...book.reviews];
-          updatedReviews[existingReviewIndex] = {
-            ...updatedReviews[existingReviewIndex],
-            rating,
-            comment,
-          };
-
-          return {
-            ...book,
-            reviews: updatedReviews,
-            averageRating: calculateAverageRating(updatedReviews),
-          };
-        }
-
-        // Adicionar nova avaliação
-        return {
-          ...book,
-          reviews: [
-            ...book.reviews,
-            {
-              id: `${book.reviews.length + 1}`,
-              user: { id: userId, name: userName },
-              rating,
-              comment,
-            },
-          ],
-          averageRating: calculateAverageRating([...book.reviews, { rating }]),
-        };
-      })
+    const existingReviewIndex = book.reviews.findIndex(
+      (review) => review.user.id === user.uid
     );
 
-    // Reset input fields for the current book
+    const updatedReviews = [...book.reviews];
+
+    if (existingReviewIndex !== -1) {
+      updatedReviews[existingReviewIndex] = {
+        ...updatedReviews[existingReviewIndex],
+        rating,
+        comment,
+      };
+    } else {
+      const newReview: Review = {
+        id: `${Date.now()}`,
+        user: { id: user.uid, name: user.displayName || "Usuário" },
+        rating,
+        comment,
+      };
+      updatedReviews.push(newReview);
+    }
+
+    const newAverageRating = calculateAverageRating(updatedReviews);
+
+    await updateDoc(bookRef, {
+      reviews: updatedReviews,
+      averageRating: newAverageRating,
+    });
+
+    setBooks((prevBooks) =>
+      prevBooks.map((b) =>
+        b.id === bookId
+          ? { ...b, reviews: updatedReviews, averageRating: newAverageRating }
+          : b
+      )
+    );
+
     setReviewInputs((prev) => ({
       ...prev,
       [bookId]: { rating: 0, comment: "" },
@@ -121,11 +174,15 @@ const PublicBookList: React.FC = () => {
     <div>
       <h1 className="text-3xl font-bold mb-6">Biblioteca de Livros</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredBooks.map((book) => {
+        {books.map((book) => {
           const showMore = expandedBooks[book.id];
           const reviewsToShow = showMore
             ? book.reviews
             : book.reviews.slice(0, 3);
+
+          const userReview = book.reviews.find(
+            (review) => review.user.id === user?.uid
+          );
 
           return (
             <div key={book.id} className="bg-white p-6 rounded-lg shadow-md">
@@ -136,35 +193,54 @@ const PublicBookList: React.FC = () => {
               <p className="text-sm font-semibold mb-4">
                 Avaliação Média: {renderStars(book.averageRating)}
               </p>
-              <div className="mb-4">
-                <h3 className="font-semibold mb-2">Deixe sua Avaliação:</h3>
-                <div className="flex items-center mb-2">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <FaStar
-                      key={star}
-                      onClick={() => handleRatingChange(book.id, star)}
-                      className={`cursor-pointer ${
-                        star <= reviewInputs[book.id].rating
-                          ? "text-yellow-500"
-                          : "text-gray-300"
-                      }`}
-                      size={20}
-                    />
-                  ))}
+              {user ? (
+                <div className="mb-4">
+                  <h3 className="font-semibold mb-2">
+                    {userReview
+                      ? "Editar sua Avaliação:"
+                      : "Deixe sua Avaliação:"}
+                  </h3>
+                  <div className="flex items-center mb-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <FaStar
+                        key={star}
+                        onClick={() => handleRatingChange(book.id, star)}
+                        className={`cursor-pointer ${
+                          star <=
+                          (reviewInputs[book.id]?.rating ||
+                            userReview?.rating ||
+                            0)
+                            ? "text-yellow-500"
+                            : "text-gray-300"
+                        }`}
+                        size={20}
+                      />
+                    ))}
+                  </div>
+                  <textarea
+                    placeholder="Escreva seu comentário..."
+                    value={
+                      reviewInputs[book.id]?.comment ||
+                      userReview?.comment ||
+                      ""
+                    }
+                    onChange={(e) =>
+                      handleCommentChange(book.id, e.target.value)
+                    }
+                    className="w-full border rounded p-2 mb-2"
+                  />
+                  <button
+                    onClick={() => addOrEditReview(book.id)}
+                    className="bg-green-500 text-white px-4 py-2 rounded"
+                  >
+                    {userReview ? "Editar Avaliação" : "Enviar Avaliação"}
+                  </button>
                 </div>
-                <textarea
-                  placeholder="Escreva seu comentário..."
-                  value={reviewInputs[book.id].comment}
-                  onChange={(e) => handleCommentChange(book.id, e.target.value)}
-                  className="w-full border rounded p-2 mb-2"
-                />
-                <button
-                  onClick={() => addOrEditReview(book.id)}
-                  className="bg-green-500 text-white px-4 py-2 rounded"
-                >
-                  Enviar Avaliação
-                </button>
-              </div>
+              ) : (
+                <p className="text-red-500">
+                  Faça login para deixar uma avaliação.
+                </p>
+              )}
               <div>
                 <h3 className="font-semibold mb-2">Avaliações:</h3>
                 {reviewsToShow.map((review) => (
